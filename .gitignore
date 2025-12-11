@@ -1,0 +1,14 @@
+node_modules
+out
+dist
+build
+.DS_Store
+npm-debug.log*
+yarn-error.log
+
+# Large build/binary files
+*.dmg
+*.zip
+*.exe
+*.dat
+*.dylib

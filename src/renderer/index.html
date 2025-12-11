@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arsenal Browser</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="green-mode">
+  <!-- Main Browser View -->
+  <div class="browser-view" id="browser-view">
+    <header class="browser-topbar">
+      <div class="tabs-bar" id="tabs-bar">
+        <!-- Tabs will be injected here -->
+        <button class="new-tab-btn" id="new-tab-btn">+</button>
+      </div>
+      <div class="browser-controls">
+        <div class="browser-nav">
+          <button class="nav-btn" id="back-btn" title="Back">←</button>
+          <button class="nav-btn" id="forward-btn" title="Forward">→</button>
+          <button class="nav-btn" id="refresh-btn" title="Refresh">⟳</button>
+        </div>
+        <div class="search-container">
+          <img src="../../assets/Arsenal-logo.png" alt="Arsenal" class="search-logo" />
+          <input type="text" id="url-bar" class="url-bar" placeholder="Search or enter URL..." />
+          <button class="search-go" id="search-go">Go</button>
+        </div>
+        <div class="browser-actions">
+          <button class="ai-chat-btn" id="ai-chat-btn" title="Arsenal AI Assistant">
+            <img src="../../assets/Arsenal-logo.png" alt="AI" class="ai-btn-logo" />
+          </button>
+          <div class="mode-toggle-mini">
+            <button id="green-mode-btn" class="mode-btn-mini green-btn active" title="Safe Mode">🛡️</button>
+            <button id="blood-mode-btn" class="mode-btn-mini blood-btn" title="Blood Mode">🩸</button>
+          </div>
+          <!-- <button id="toggle-devtools" class="nav-btn" title="DevTools">⚙️</button> -->
+          <button id="settings-btn" class="nav-btn" title="Settings">☰</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="browser-content" id="webviews-container">
+      <!-- Webviews will be injected here -->
+      <div class="new-tab-page" id="new-tab-page">
+        <div class="ntp-hero">
+          <img src="../../assets/Arsenal-logo.png" alt="Arsenal Browser" class="ntp-logo" />
+          <h1 class="ntp-title">ARSENAL</h1>
+          <p class="ntp-sub">AI-Powered Browser</p>
+        </div>
+        <div class="ntp-search">
+          <input type="text" id="ntp-search-input" class="ntp-search-input" placeholder="Search the web or ask AI..." />
+          <button class="ntp-search-btn" id="ntp-search-btn">Search</button>
+        </div>
+        <div class="ntp-status" id="ntp-status">
+          <span class="status-dot"></span>
+          <span id="ntp-mode-text">Safe Mode</span>
+        </div>
+        <div class="quick-links">
+          <a href="https://google.com" class="quick-link" data-url="https://google.com">
+            <div class="ql-icon">G</div>
+            <span>Google</span>
+          </a>
+          <a href="https://github.com" class="quick-link" data-url="https://github.com">
+            <div class="ql-icon">⌥</div>
+            <span>GitHub</span>
+          </a>
+          <a href="https://youtube.com" class="quick-link" data-url="https://youtube.com">
+            <div class="ql-icon">▶</div>
+            <span>YouTube</span>
+          </a>
+          <a href="https://stackoverflow.com" class="quick-link" data-url="https://stackoverflow.com">
+            <div class="ql-icon">⚡</div>
+            <span>Stack Overflow</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Webview for browsing -->
+      <!-- <webview id="webview" class="webview hidden" allowpopups></webview> -->
+    </div>
+  </div>
+
+  <!-- AI Chat Sidebar -->
+  <div class="ai-sidebar hidden" id="ai-sidebar">
+    <div class="ai-sidebar-resize-handle" id="ai-resize-handle"></div>
+    <div class="ai-sidebar-header">
+      <div class="ai-header-left">
+        <img src="../../assets/Arsenal-logo.png" alt="Arsenal AI" class="ai-sidebar-logo" />
+        <div>
+          <h3>Arsenal AI</h3>
+          <p class="muted">Your AI Assistant</p>
+        </div>
+      </div>
+      <button class="ai-close-btn" id="ai-close-btn">✕</button>
+    </div>
+    <div class="ai-provider-select">
+      <select id="ai-provider">
+        <option value="openai">OpenAI GPT-4o</option>
+        <option value="gemini">Google Gemini</option>
+        <option value="deepseek">DeepSeek</option>
+      </select>
+    </div>
+    <div class="ai-chat-messages" id="ai-chat-messages">
+      <div class="ai-welcome">
+        <img src="../../assets/Arsenal-logo.png" alt="" class="ai-welcome-logo" />
+        <p>Hi! I'm Arsenal AI. Ask me anything!</p>
+      </div>
+    </div>
+    <div class="ai-chat-input-wrapper">
+      <div id="ai-clipboard-preview" class="ai-clipboard-preview hidden">
+        <span class="clipboard-text"></span>
+        <button class="clipboard-add-btn">Add to Chat</button>
+        <button class="clipboard-close-btn">✕</button>
+      </div>
+      <div id="ai-image-preview" class="ai-image-preview hidden"></div>
+      <div class="ai-chat-input">
+        <input type="file" id="ai-file-input" accept="image/*" hidden>
+        <button id="ai-attach-btn" class="ai-attach-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+        </button>
+        <textarea id="ai-chat-input" placeholder="Ask Arsenal AI..." rows="1"></textarea>
+        <button id="ai-send-btn" class="ai-send-btn">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="settings-panel hidden" id="settings-panel">
+    <div class="settings-header">
+      <h2>Settings</h2>
+      <button class="settings-close" id="settings-close">✕</button>
+    </div>
+    <div class="settings-content">
+      <section class="settings-section">
+        <h3>🔑 API Keys</h3>
+        <p class="muted">Encrypted locally. Required for AI features.</p>
+        <div class="settings-form">
+          <div class="field-group" data-provider="openai">
+            <div class="field">
+              <label for="openai-key">OpenAI API Key</label>
+              <div class="key-status hidden" id="openai-status">
+                <span class="key-badge">✓ Key Added</span>
+                <button class="edit-key-btn" data-provider="openai">Edit</button>
+              </div>
+              <input id="openai-key" type="password" placeholder="sk-…" autocomplete="off" />
+            </div>
+            <div class="field model-field">
+              <label for="openai-model">Model</label>
+              <div class="key-status hidden" id="openai-model-status">
+                <span class="key-badge model-name" id="openai-model-display">gpt-4o-mini</span>
+                <button class="edit-key-btn" data-provider="openai" data-type="model">Edit</button>
+              </div>
+              <input id="openai-model" type="text" placeholder="gpt-4o-mini" autocomplete="off" />
+            </div>
+          </div>
+          
+          <div class="field-group" data-provider="gemini">
+            <div class="field">
+              <label for="gemini-key">Gemini API Key</label>
+              <div class="key-status hidden" id="gemini-status">
+                <span class="key-badge">✓ Key Added</span>
+                <button class="edit-key-btn" data-provider="gemini">Edit</button>
+              </div>
+              <input id="gemini-key" type="password" placeholder="AIza…" autocomplete="off" />
+            </div>
+            <div class="field model-field">
+              <label for="gemini-model">Model</label>
+              <div class="key-status hidden" id="gemini-model-status">
+                <span class="key-badge model-name" id="gemini-model-display">gemini-1.5-flash</span>
+                <button class="edit-key-btn" data-provider="gemini" data-type="model">Edit</button>
+              </div>
+              <input id="gemini-model" type="text" placeholder="gemini-2.5-flash" autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="field-group" data-provider="deepseek">
+            <div class="field">
+              <label for="deepseek-key">DeepSeek API Key</label>
+              <div class="key-status hidden" id="deepseek-status">
+                <span class="key-badge">✓ Key Added</span>
+                <button class="edit-key-btn" data-provider="deepseek">Edit</button>
+              </div>
+              <input id="deepseek-key" type="password" placeholder="sk-…" autocomplete="off" />
+            </div>
+            <div class="field model-field">
+              <label for="deepseek-model">Model</label>
+              <div class="key-status hidden" id="deepseek-model-status">
+                <span class="key-badge model-name" id="deepseek-model-display">deepseek-chat</span>
+                <button class="edit-key-btn" data-provider="deepseek" data-type="model">Edit</button>
+              </div>
+              <input id="deepseek-model" type="text" placeholder="deepseek-chat" autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="save-keys">Save Keys & Models</button>
+            <span id="save-status" class="muted"></span>
+          </div>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h3>🎨 Theme</h3>
+        <div class="theme-options">
+          <button id="settings-green" class="theme-btn green-theme active">🛡️ Green Mode</button>
+          <button id="settings-blood" class="theme-btn blood-theme">🩸 Blood Mode</button>
+        </div>
+        <div class="proxy-status" id="proxy-status">
+          <span class="proxy-dot"></span>
+          <span id="proxy-ip-display">Direct Connection</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- API Key Overlay (First Launch) -->
+  <div id="key-overlay" class="overlay hidden">
+    <div class="overlay-card">
+      <img src="../../assets/Arsenal-logo.png" alt="Arsenal" class="overlay-logo" />
+      <h3>Welcome to Arsenal</h3>
+      <p class="muted">Enter your API keys to unlock AI features.</p>
+      <div class="overlay-fields">
+        <input id="overlay-openai" type="password" placeholder="OpenAI Key (sk-...)" />
+        <input id="overlay-gemini" type="password" placeholder="Gemini Key (AIza...)" />
+        <input id="overlay-deepseek" type="password" placeholder="DeepSeek Key" />
+      </div>
+      <div class="overlay-actions">
+        <button id="overlay-save">Save & Start Browsing</button>
+        <button id="overlay-dismiss" class="ghost">Skip for now</button>
+      </div>
+      <div id="overlay-status" class="muted"></div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
