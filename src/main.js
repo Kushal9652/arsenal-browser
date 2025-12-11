@@ -72,7 +72,7 @@ async function createWindow() {
   });
 
   await win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  
+
   // Check if Arsenal is the default browser
   checkDefaultBrowser();
 }
@@ -81,7 +81,7 @@ async function createWindow() {
 function checkDefaultBrowser() {
   const isDefault = app.isDefaultProtocolClient('http');
   const hasAsked = store.get('askedDefaultBrowser', false);
-  
+
   if (!isDefault && !hasAsked) {
     dialog.showMessageBox({
       type: 'question',
@@ -120,7 +120,7 @@ app.whenReady().then(() => {
     }
     callback({ requestHeaders: details.requestHeaders });
   });
-  
+
   // Apply to webview partition too
   const webviewSession = session.fromPartition('persist:arsenal');
   webviewSession.webRequest.onBeforeSendHeaders((details, callback) => {
@@ -130,7 +130,7 @@ app.whenReady().then(() => {
     }
     callback({ requestHeaders: details.requestHeaders });
   });
-  
+
   // Disable WebRTC IP leak in blood mode
   webviewSession.setPermissionRequestHandler((webContents, permission, callback) => {
     if (currentMode === 'blood' && permission === 'media') {
@@ -140,7 +140,15 @@ app.whenReady().then(() => {
       callback(true);
     }
   });
-  
+
+  // Handle proxy authentication for webview session (Attached ONCE)
+  webviewSession.on('login', (event, webContents, details, authInfo, callback) => {
+    if (authInfo.isProxy && currentProxy) {
+      event.preventDefault();
+      callback(currentProxy.username, currentProxy.password);
+    }
+  });
+
   createWindow();
 });
 
@@ -185,15 +193,15 @@ ipcMain.handle('keys:save', async (_event, payload) => {
   if (!PROVIDERS.includes(provider)) {
     throw new Error('Unsupported provider');
   }
-  
+
   if (apiKey) {
     store.set(`keys.${provider}`, apiKey.trim());
   }
-  
+
   if (model) {
     store.set(`models.${provider}`, model.trim());
   }
-  
+
   return { provider };
 });
 
@@ -209,16 +217,16 @@ ipcMain.handle('window:toggle-devtools', () => {
 ipcMain.handle('mode:set', async (_event, mode) => {
   currentMode = mode;
   const win = BrowserWindow.getFocusedWindow();
-  
+
   // Get the webview partition session (persist:arsenal)
   const webviewSession = session.fromPartition('persist:arsenal');
-  
+
   if (mode === 'blood') {
     // In Blood Mode, set up authenticated proxy
     if (PROXY_LIST.length > 0) {
       currentProxy = PROXY_LIST[proxyIndex % PROXY_LIST.length];
       proxyIndex++;
-      
+
       try {
         const proxyUrl = getProxyUrl(currentProxy);
         // Set proxy on BOTH sessions
@@ -229,17 +237,12 @@ ipcMain.handle('mode:set', async (_event, mode) => {
         console.log('Proxy configuration error:', e.message);
       }
     }
-    
+
     // Handle proxy authentication for webview session
-    webviewSession.on('login', (event, webContents, details, authInfo, callback) => {
-      if (authInfo.isProxy && currentProxy) {
-        event.preventDefault();
-        callback(currentProxy.username, currentProxy.password);
-      }
-    });
-    
+    // LISTENER REMOVED: Managed in app.whenReady() now
+
     // Disable some tracking features
-    if (win) {
+    if (win && !win.isDestroyed()) {
       win.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
         // Block geolocation and other tracking in blood mode
         if (permission === 'geolocation') {
@@ -249,7 +252,7 @@ ipcMain.handle('mode:set', async (_event, mode) => {
         }
       });
     }
-    
+
     return { mode: 'blood', status: `Proxy: ${currentProxy?.host}:${currentProxy?.port}` };
   } else {
     // Green mode - direct connection
@@ -270,13 +273,13 @@ ipcMain.handle('proxy:current', async () => {
   if (currentMode !== 'blood' || !currentProxy) {
     return null;
   }
-  
+
   const ip = currentProxy.host;
-  
+
   // Determine region based on IP ranges
   const regionMap = {
     '142.111': 'US',
-    '31.59': 'EU', 
+    '31.59': 'EU',
     '23.95': 'US',
     '198.23': 'US',
     '107.172': 'US',
@@ -285,10 +288,10 @@ ipcMain.handle('proxy:current', async () => {
     '84.247': 'EU',
     '216.10': 'US',
   };
-  
+
   const ipPrefix = ip.split('.').slice(0, 2).join('.');
   const region = regionMap[ipPrefix] || 'US';
-  
+
   return { ip, region, full: `${ip}:${currentProxy.port}` };
 });
 
@@ -297,17 +300,17 @@ ipcMain.handle('proxy:rotate', async () => {
   if (currentMode !== 'blood' || PROXY_LIST.length === 0) {
     return null;
   }
-  
+
   // Move to next proxy
   currentProxy = PROXY_LIST[proxyIndex % PROXY_LIST.length];
   proxyIndex++;
-  
+
   // Also rotate User-Agent for better anti-detection
   currentUserAgent = getRandomUserAgent();
-  
+
   const webviewSession = session.fromPartition('persist:arsenal');
   const proxyUrl = getProxyUrl(currentProxy);
-  
+
   try {
     await session.defaultSession.setProxy({ proxyRules: proxyUrl });
     await webviewSession.setProxy({ proxyRules: proxyUrl });
@@ -315,7 +318,7 @@ ipcMain.handle('proxy:rotate', async () => {
   } catch (e) {
     console.log('Proxy rotation error:', e.message);
   }
-  
+
   return { ip: currentProxy.host, port: currentProxy.port };
 });
 
@@ -334,7 +337,7 @@ ipcMain.handle('ai:request', async (_event, payload) => {
 
   const apiKey = store.get(`keys.${provider}`);
   const customModel = store.get(`models.${provider}`);
-  
+
   if (!apiKey) {
     throw new Error(`Missing API key for ${provider}`);
   }
@@ -357,7 +360,7 @@ ipcMain.handle('ai:request', async (_event, payload) => {
 async function runOpenAI(apiKey, prompt, system, opts = {}, images = []) {
   const endpoint = opts.endpoint || 'https://api.openai.com/v1/chat/completions';
   const model = opts.model || 'gpt-4o-mini';
-  
+
   let userContent;
   if (images.length > 0 && !endpoint.includes('deepseek')) { // DeepSeek might not support vision yet in this format
     userContent = [
@@ -374,7 +377,7 @@ async function runOpenAI(apiKey, prompt, system, opts = {}, images = []) {
   const body = {
     model,
     messages: [
-      system ? { role: 'system', content: system } : null, 
+      system ? { role: 'system', content: system } : null,
       { role: 'user', content: userContent }
     ].filter(Boolean),
     temperature: 0.7,
@@ -405,14 +408,14 @@ async function runGemini(apiKey, prompt, system, customModel, images = []) {
     const genAI = new GoogleGenerativeAI(apiKey);
     // Use custom model if provided, else default to 1.5 Flash (supports vision)
     const modelName = customModel || "gemini-1.5-flash";
-    
-    const model = genAI.getGenerativeModel({ 
+
+    const model = genAI.getGenerativeModel({
       model: modelName,
-      systemInstruction: system 
+      systemInstruction: system
     });
 
     let contentParts = [prompt];
-    
+
     if (images && images.length > 0) {
       const imageParts = images.map(img => {
         // img is "data:image/png;base64,..."
@@ -427,7 +430,7 @@ async function runGemini(apiKey, prompt, system, customModel, images = []) {
         }
         return null;
       }).filter(Boolean);
-      
+
       contentParts = [prompt, ...imageParts];
     }
 
@@ -439,32 +442,32 @@ async function runGemini(apiKey, prompt, system, customModel, images = []) {
   } catch (error) {
     // Fallback logic only if no custom model was forced
     if (!customModel) {
-        try {
-            console.log("Gemini default failed, trying gemini-1.5-flash...");
-            const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ 
-                model: "gemini-1.5-flash",
-                systemInstruction: system 
-            });
-            
-            // Retry with same content parts
-            let contentParts = [prompt];
-            if (images && images.length > 0) {
-                const imageParts = images.map(img => {
-                    const match = img.match(/^data:(.*?);base64,(.*)$/);
-                    if (match) return { inlineData: { mimeType: match[1], data: match[2] } };
-                    return null;
-                }).filter(Boolean);
-                contentParts = [prompt, ...imageParts];
-            }
+      try {
+        console.log("Gemini default failed, trying gemini-1.5-flash...");
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+          model: "gemini-1.5-flash",
+          systemInstruction: system
+        });
 
-            const result = await model.generateContent(contentParts);
-            const response = await result.response;
-            const text = response.text();
-            return { text };
-        } catch (fallbackError) {
-            throw new Error(`Gemini request failed: ${error.message}`);
+        // Retry with same content parts
+        let contentParts = [prompt];
+        if (images && images.length > 0) {
+          const imageParts = images.map(img => {
+            const match = img.match(/^data:(.*?);base64,(.*)$/);
+            if (match) return { inlineData: { mimeType: match[1], data: match[2] } };
+            return null;
+          }).filter(Boolean);
+          contentParts = [prompt, ...imageParts];
         }
+
+        const result = await model.generateContent(contentParts);
+        const response = await result.response;
+        const text = response.text();
+        return { text };
+      } catch (fallbackError) {
+        throw new Error(`Gemini request failed: ${error.message}`);
+      }
     }
     throw new Error(`Gemini request failed: ${error.message}`);
   }

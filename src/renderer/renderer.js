@@ -16,12 +16,54 @@ const forwardBtn = $('forward-btn');
 const refreshBtn = $('refresh-btn');
 
 // Mode
-const greenModeBtn = $('green-mode-btn');
-const bloodModeBtn = $('blood-mode-btn');
+// Mode
+const modeToggleBtn = $('mode-toggle-btn');
 const ntpModeText = $('ntp-mode-text');
 const settingsGreen = $('settings-green');
 const settingsBlood = $('settings-blood');
 const proxyIpDisplay = $('proxy-ip-display');
+
+// ...
+
+function setMode(mode) {
+  currentMode = mode;
+  document.body.classList.remove('green-mode', 'blood-mode');
+  document.body.classList.add(`${mode}-mode`);
+
+  // Update Toggle Button
+  if (mode === 'green') {
+    modeToggleBtn.textContent = '🛡️';
+    modeToggleBtn.className = 'mode-btn-mini mode-toggle green';
+    modeToggleBtn.title = "Safe Mode (Click to switch to Blood Mode)";
+
+    ntpModeText.textContent = 'Safe Mode';
+    if (proxyIpDisplay) proxyIpDisplay.textContent = 'Direct Connection';
+    stopProxyRotation();
+    window.arsenal.setMode('green');
+  } else {
+    modeToggleBtn.textContent = '🩸';
+    modeToggleBtn.className = 'mode-btn-mini mode-toggle blood';
+    modeToggleBtn.title = "Blood Mode (Click to switch to Safe Mode)";
+
+    ntpModeText.textContent = 'Blood Mode • Proxy Active';
+    startProxyRotation();
+    window.arsenal.setMode('blood');
+  }
+
+  // Update Settings Panel Buttons if they exist
+  settingsGreen?.classList.toggle('active', mode === 'green');
+  settingsBlood?.classList.toggle('active', mode === 'blood');
+
+  localStorage.setItem('arsenal-mode', mode);
+}
+
+// Single Toggle Event Listener
+modeToggleBtn.addEventListener('click', () => {
+  const newMode = currentMode === 'green' ? 'blood' : 'green';
+  setMode(newMode);
+});
+
+// Remove old listeners references (conceptually)
 
 // AI Sidebar
 const aiSidebar = $('ai-sidebar');
@@ -62,7 +104,7 @@ let tabIdCounter = 0;
 
 async function createTab(url = null) {
   const tabId = tabIdCounter++;
-  
+
   // Auto-rotate proxy on new tab in blood mode
   if (currentMode === 'blood') {
     const newProxy = await window.arsenal.rotateProxy();
@@ -71,7 +113,7 @@ async function createTab(url = null) {
       updateProxyIP();
     }
   }
-  
+
   // Create Tab UI
   const tabEl = document.createElement('div');
   tabEl.className = 'tab';
@@ -80,10 +122,10 @@ async function createTab(url = null) {
     <span class="tab-title">New Tab</span>
     <button class="tab-close">✕</button>
   `;
-  
+
   // Insert before the new tab button
   tabsBar.insertBefore(tabEl, newTabBtn);
-  
+
   // Create Webview
   const webview = document.createElement('webview');
   webview.className = 'webview hidden';
@@ -91,7 +133,7 @@ async function createTab(url = null) {
   webview.setAttribute('partition', 'persist:arsenal'); // Persist cookies & sessions
   webview.src = url || 'about:blank';
   webview.preload = './webview-preload.js';
-  
+
   // Attach events to webview
   webview.addEventListener('ipc-message', (e) => {
     if (e.channel === 'copied-text') {
@@ -104,28 +146,28 @@ async function createTab(url = null) {
       // update loading state if needed
     }
   });
-  
+
   webview.addEventListener('did-stop-loading', () => {
     if (activeTabId === tabId) {
       updateUrlBar(webview.getURL());
     }
     updateTabTitle(tabId, webview.getTitle());
   });
-  
+
   webview.addEventListener('did-navigate', (e) => {
     if (activeTabId === tabId) {
       updateUrlBar(e.url);
     }
     updateTabTitle(tabId, webview.getTitle());
   });
-  
+
   webview.addEventListener('did-navigate-in-page', (e) => {
     if (activeTabId === tabId) {
       updateUrlBar(e.url);
     }
     updateTabTitle(tabId, webview.getTitle());
   });
-  
+
   webview.addEventListener('page-title-updated', (e) => {
     updateTabTitle(tabId, e.title);
   });
@@ -135,7 +177,7 @@ async function createTab(url = null) {
   });
 
   webviewsContainer.appendChild(webview);
-  
+
   const tabData = {
     id: tabId,
     el: tabEl,
@@ -143,32 +185,32 @@ async function createTab(url = null) {
     url: url || 'about:blank',
     title: 'New Tab'
   };
-  
+
   tabs.push(tabData);
-  
+
   // Event listeners for tab UI
   tabEl.addEventListener('click', (e) => {
     if (!e.target.classList.contains('tab-close')) {
       switchTab(tabId);
     }
   });
-  
+
   tabEl.querySelector('.tab-close').addEventListener('click', (e) => {
     e.stopPropagation();
     closeTab(tabId);
   });
-  
+
   switchTab(tabId);
   return tabData;
 }
 
 function switchTab(id) {
   activeTabId = id;
-  
+
   tabs.forEach(tab => {
     const isActive = tab.id === id;
     tab.el.classList.toggle('active', isActive);
-    
+
     if (isActive) {
       // Show this webview
       if (tab.url === 'about:blank' || !tab.url) {
@@ -189,13 +231,16 @@ function switchTab(id) {
 function closeTab(id) {
   const index = tabs.findIndex(t => t.id === id);
   if (index === -1) return;
-  
+
   const tab = tabs[index];
-  tab.el.remove();
-  tab.webview.remove();
-  
+  if (tab.el && tab.el.parentNode) tab.el.remove();
+  if (tab.webview && tab.webview.parentNode) {
+    // Remove event listeners if any
+    tab.webview.remove();
+  }
+
   tabs.splice(index, 1);
-  
+
   if (tabs.length === 0) {
     createTab();
   } else if (activeTabId === id) {
@@ -231,7 +276,7 @@ function updateActiveTabUrl(url) {
   if (tab) {
     tab.url = url;
     tab.webview.src = url;
-    
+
     if (url === 'about:blank') {
       tab.webview.classList.add('hidden');
       newTabPage.classList.remove('hidden');
@@ -245,7 +290,7 @@ function updateActiveTabUrl(url) {
 // ===== NAVIGATION =====
 function navigate(url) {
   if (!url) return;
-  
+
   // Add protocol if missing
   if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('about:')) {
     // Check if it looks like a URL
@@ -256,7 +301,7 @@ function navigate(url) {
       url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
     }
   }
-  
+
   updateActiveTabUrl(url);
   urlBar.value = url;
 }
@@ -298,29 +343,7 @@ quickLinks.forEach(link => {
 });
 
 // ===== MODE SWITCHING =====
-function setMode(mode) {
-  currentMode = mode;
-  document.body.classList.remove('green-mode', 'blood-mode');
-  document.body.classList.add(`${mode}-mode`);
 
-  greenModeBtn.classList.toggle('active', mode === 'green');
-  bloodModeBtn.classList.toggle('active', mode === 'blood');
-  settingsGreen?.classList.toggle('active', mode === 'green');
-  settingsBlood?.classList.toggle('active', mode === 'blood');
-
-  if (mode === 'green') {
-    ntpModeText.textContent = 'Safe Mode';
-    if (proxyIpDisplay) proxyIpDisplay.textContent = 'Direct Connection';
-    stopProxyRotation();
-    window.arsenal.setMode('green');
-  } else {
-    ntpModeText.textContent = 'Blood Mode • Proxy Active';
-    startProxyRotation();
-    window.arsenal.setMode('blood');
-  }
-
-  localStorage.setItem('arsenal-mode', mode);
-}
 
 function startProxyRotation() {
   updateProxyIP();
@@ -348,8 +371,7 @@ async function updateProxyIP() {
   }
 }
 
-greenModeBtn.addEventListener('click', () => setMode('green'));
-bloodModeBtn.addEventListener('click', () => setMode('blood'));
+
 settingsGreen?.addEventListener('click', () => setMode('green'));
 settingsBlood?.addEventListener('click', () => setMode('blood'));
 
@@ -366,7 +388,9 @@ aiChatBtn.addEventListener('click', () => toggleAiSidebar(true));
 aiCloseBtn.addEventListener('click', () => toggleAiSidebar(false));
 
 // ===== SIDEBAR RESIZE (DRAG TO EXPAND) =====
+// ===== SIDEBAR RESIZE (DRAG TO EXPAND) =====
 const resizeHandle = document.getElementById('ai-resize-handle');
+const resizeOverlay = document.getElementById('resize-overlay');
 let isResizing = false;
 let startX, startWidth;
 
@@ -374,35 +398,46 @@ resizeHandle?.addEventListener('mousedown', (e) => {
   isResizing = true;
   startX = e.clientX;
   startWidth = aiSidebar.offsetWidth;
+
+  // Show overlay to capture events over webviews
+  resizeOverlay.classList.remove('hidden');
   document.body.style.cursor = 'ew-resize';
   document.body.style.userSelect = 'none';
+  resizeHandle.classList.add('active');
+
   e.preventDefault();
 });
 
+// Attach mousemove/up to document to catch fast movements
 document.addEventListener('mousemove', (e) => {
   if (!isResizing) return;
+
   const diff = startX - e.clientX;
-  const newWidth = Math.min(Math.max(startWidth + diff, 320), window.innerWidth - 100);
+  // Limit resize between 300px and window width - 100px
+  const newWidth = Math.min(Math.max(startWidth + diff, 300), window.innerWidth - 100);
   aiSidebar.style.width = newWidth + 'px';
 });
 
 document.addEventListener('mouseup', () => {
   if (isResizing) {
     isResizing = false;
+    // Hide overlay
+    resizeOverlay.classList.add('hidden');
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+    resizeHandle.classList.remove('active');
   }
 });
 
 function formatContent(text) {
   // Simple markdown code block parser
   const escapeHtml = (str) => str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-  
+
   // Split by code blocks
   const parts = text.split(/```(\w*)\n?([\s\S]*?)```/g);
-  
+
   let html = '';
-  
+
   for (let i = 0; i < parts.length; i++) {
     if (i % 3 === 0) {
       // Normal text
@@ -427,10 +462,10 @@ function formatContent(text) {
 function addMessage(role, content) {
   const msgEl = document.createElement('div');
   msgEl.className = `ai-message ${role}`;
-  
+
   if (role === 'assistant') {
     msgEl.innerHTML = formatContent(content);
-    
+
     // Highlight code blocks
     msgEl.querySelectorAll('pre code').forEach((block) => {
       if (window.hljs) window.hljs.highlightElement(block);
@@ -452,11 +487,11 @@ function addMessage(role, content) {
   } else {
     msgEl.textContent = content;
   }
-  
+
   // Remove welcome message if exists
   const welcome = aiChatMessages.querySelector('.ai-welcome');
   if (welcome) welcome.remove();
-  
+
   aiChatMessages.appendChild(msgEl);
   aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
 }
@@ -465,16 +500,16 @@ function addMessage(role, content) {
 async function addMessageWithTyping(role, content) {
   const msgEl = document.createElement('div');
   msgEl.className = `ai-message ${role}`;
-  
+
   // Remove welcome message if exists
   const welcome = aiChatMessages.querySelector('.ai-welcome');
   if (welcome) welcome.remove();
-  
+
   aiChatMessages.appendChild(msgEl);
-  
+
   // Check if content has code blocks
   const hasCodeBlocks = content.includes('```');
-  
+
   if (hasCodeBlocks) {
     // For code blocks, type faster and in chunks
     await typeContentWithCode(msgEl, content);
@@ -482,7 +517,7 @@ async function addMessageWithTyping(role, content) {
     // For plain text, type character by character
     await typeContent(msgEl, content);
   }
-  
+
   aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
 }
 
@@ -490,7 +525,7 @@ async function typeContent(element, text) {
   const escapeHtml = (str) => str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   let displayed = '';
   const speed = 8; // milliseconds per character (fast typing)
-  
+
   for (let i = 0; i < text.length; i++) {
     displayed += text[i];
     // Handle inline code and newlines
@@ -499,21 +534,21 @@ async function typeContent(element, text) {
     html = html.replace(/\n/g, '<br>');
     element.innerHTML = html + '<span class="typing-cursor">|</span>';
     aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
-    
+
     // Variable speed: faster for spaces, slower for punctuation
     const char = text[i];
     const delay = char === ' ' ? speed / 2 : (char === '.' || char === '!' || char === '?') ? speed * 3 : speed;
     await sleep(delay);
   }
-  
+
   // Remove cursor and format final content
   element.innerHTML = formatContent(displayed);
-  
+
   // Highlight code blocks
   element.querySelectorAll('pre code').forEach((block) => {
     if (window.hljs) window.hljs.highlightElement(block);
   });
-  
+
   // Add copy functionality
   element.querySelectorAll('.copy-code-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -532,22 +567,22 @@ async function typeContentWithCode(element, text) {
   const words = text.split(/( +)/);
   let displayed = '';
   const speed = 15; // milliseconds per word
-  
+
   for (let i = 0; i < words.length; i++) {
     displayed += words[i];
     element.innerHTML = formatContent(displayed) + '<span class="typing-cursor">|</span>';
     aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
     await sleep(speed);
   }
-  
+
   // Final formatting
   element.innerHTML = formatContent(displayed);
-  
+
   // Highlight code blocks
   element.querySelectorAll('pre code').forEach((block) => {
     if (window.hljs) window.hljs.highlightElement(block);
   });
-  
+
   // Add copy functionality
   element.querySelectorAll('.copy-code-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -590,12 +625,12 @@ aiChatInput.addEventListener('paste', (e) => {
 function showClipboardPreview(text) {
   if (!text) return;
   pendingClipboardText = text;
-  
+
   const textEl = aiClipboardPreview.querySelector('.clipboard-text');
   textEl.textContent = text.length > 50 ? text.substring(0, 50) + '...' : text;
-  
+
   aiClipboardPreview.classList.remove('hidden');
-  
+
   // Auto-hide after 10 seconds if ignored
   setTimeout(() => {
     if (aiClipboardPreview.classList.contains('hidden') === false) {
@@ -612,7 +647,7 @@ aiClipboardPreview.querySelector('.clipboard-add-btn').addEventListener('click',
     const text = aiChatInput.value;
     const before = text.substring(0, start);
     const after = text.substring(end, text.length);
-    
+
     aiChatInput.value = before + pendingClipboardText + after;
     aiChatInput.focus();
     aiClipboardPreview.classList.add('hidden');
@@ -640,14 +675,14 @@ aiFileInput.addEventListener('change', (e) => {
     updateImagePreview();
   };
   reader.readAsDataURL(file);
-  
+
   // Reset input so same file can be selected again
   aiFileInput.value = '';
 });
 
 function updateImagePreview() {
   aiImagePreview.innerHTML = '';
-  
+
   if (attachedImages.length > 0) {
     aiImagePreview.classList.remove('hidden');
   } else {
@@ -657,10 +692,10 @@ function updateImagePreview() {
   attachedImages.forEach((imgSrc, index) => {
     const thumb = document.createElement('div');
     thumb.className = 'preview-thumb';
-    
+
     const img = document.createElement('img');
     img.src = imgSrc;
-    
+
     const removeBtn = document.createElement('button');
     removeBtn.className = 'preview-remove';
     removeBtn.innerHTML = '✕';
@@ -668,7 +703,7 @@ function updateImagePreview() {
       attachedImages.splice(index, 1);
       updateImagePreview();
     };
-    
+
     thumb.appendChild(img);
     thumb.appendChild(removeBtn);
     aiImagePreview.appendChild(thumb);
@@ -678,11 +713,11 @@ function updateImagePreview() {
 async function sendAiMessage() {
   const message = aiChatInput.value.trim();
   if (!message && attachedImages.length === 0) return;
-  
+
   // Add user message with images if any
   const userMsgEl = document.createElement('div');
   userMsgEl.className = 'ai-message user';
-  
+
   let contentHtml = '';
   if (attachedImages.length > 0) {
     contentHtml += `<div class="message-images">`;
@@ -692,7 +727,7 @@ async function sendAiMessage() {
     contentHtml += `</div>`;
   }
   contentHtml += `<div>${message}</div>`;
-  
+
   userMsgEl.innerHTML = contentHtml;
   aiChatMessages.appendChild(userMsgEl);
   aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
@@ -702,9 +737,9 @@ async function sendAiMessage() {
   const imagesToSend = [...attachedImages];
   attachedImages = [];
   updateImagePreview();
-  
+
   const provider = aiProvider.value;
-  
+
   // Show typing indicator
   const typingEl = document.createElement('div');
   typingEl.className = 'ai-message assistant typing';
@@ -712,12 +747,12 @@ async function sendAiMessage() {
   typingEl.id = 'typing-indicator';
   aiChatMessages.appendChild(typingEl);
   aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
-  
+
   try {
     // Pass images to the backend
     const result = await window.arsenal.requestAI(provider, message, imagesToSend);
     typingEl.remove();
-    
+
     // Create message element for typing effect
     const responseText = result?.text || 'No response received.';
     await addMessageWithTyping('assistant', responseText);
@@ -751,12 +786,12 @@ async function saveKeys(source) {
   for (const provider of providers) {
     const keyInput = source === 'overlay' ? $(`overlay-${provider}`) : $(`${provider}-key`);
     const modelInput = source === 'overlay' ? null : $(`${provider}-model`);
-    
+
     // Get key value - only if input is visible (not showing badge)
     const keyStatusEl = $(`${provider}-status`);
     const keyIsEditing = !keyStatusEl || keyStatusEl.classList.contains('hidden');
     const key = (keyIsEditing && keyInput) ? keyInput.value.trim() : '';
-    
+
     // Get model value - check if input is visible or get from display
     const modelStatusEl = $(`${provider}-model-status`);
     const modelIsEditing = !modelStatusEl || modelStatusEl.classList.contains('hidden');
@@ -782,9 +817,9 @@ async function checkKeys() {
   try {
     const data = await window.arsenal.loadKeys();
     // data is now { provider: { hasKey: bool, model: string } }
-    
+
     const hasAny = Object.values(data).some(d => d.hasKey);
-    
+
     // Update key status UI and pre-fill model inputs
     for (const [provider, info] of Object.entries(data)) {
       const keyInput = $(`${provider}-key`);
@@ -792,7 +827,7 @@ async function checkKeys() {
       const statusEl = $(`${provider}-status`);
       const modelStatusEl = $(`${provider}-model-status`);
       const modelDisplayEl = $(`${provider}-model-display`);
-      
+
       if (info.hasKey) {
         // Show "Key Added" badge, hide input
         if (statusEl) statusEl.classList.remove('hidden');
@@ -802,7 +837,7 @@ async function checkKeys() {
         if (statusEl) statusEl.classList.add('hidden');
         if (keyInput) keyInput.classList.remove('hidden');
       }
-      
+
       // Handle model status
       if (info.model) {
         if (modelStatusEl) modelStatusEl.classList.remove('hidden');
@@ -816,21 +851,21 @@ async function checkKeys() {
         if (modelInput) modelInput.classList.remove('hidden');
       }
     }
-    
+
     // Update dropdown options based on available keys
     const select = document.getElementById('ai-provider');
     if (select) {
       const currentVal = select.value;
       select.innerHTML = '';
-      
+
       const providerNames = {
         openai: 'OpenAI',
         gemini: 'Google Gemini',
         deepseek: 'DeepSeek'
       };
-      
+
       let hasValidSelection = false;
-      
+
       for (const [provider, info] of Object.entries(data)) {
         if (info.hasKey) {
           const option = document.createElement('option');
@@ -839,11 +874,11 @@ async function checkKeys() {
           const modelDisplay = info.model ? ` (${info.model})` : '';
           option.textContent = `${providerNames[provider]}${modelDisplay}`;
           select.appendChild(option);
-          
+
           if (provider === currentVal) hasValidSelection = true;
         }
       }
-      
+
       if (select.options.length === 0) {
         const option = document.createElement('option');
         option.textContent = 'No API Keys Saved';
@@ -902,11 +937,11 @@ document.querySelectorAll('.edit-key-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     const provider = e.target.dataset.provider;
     const isModel = e.target.dataset.type === 'model';
-    
+
     if (isModel) {
       const modelInput = $(`${provider}-model`);
       const modelStatusEl = $(`${provider}-model-status`);
-      
+
       if (modelStatusEl) modelStatusEl.classList.add('hidden');
       if (modelInput) {
         modelInput.classList.remove('hidden');
@@ -916,7 +951,7 @@ document.querySelectorAll('.edit-key-btn').forEach(btn => {
     } else {
       const keyInput = $(`${provider}-key`);
       const statusEl = $(`${provider}-status`);
-      
+
       if (statusEl) statusEl.classList.add('hidden');
       if (keyInput) {
         keyInput.classList.remove('hidden');
