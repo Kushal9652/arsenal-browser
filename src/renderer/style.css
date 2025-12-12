@@ -240,6 +240,22 @@ body.blood-mode::before {
   color: var(--text);
 }
 
+/* Loading spinner animation */
+.nav-btn.loading {
+  animation: spin 1s linear infinite;
+  color: var(--accent);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ===== SEARCH CONTAINER ===== */
 .search-container {
   flex: 1;

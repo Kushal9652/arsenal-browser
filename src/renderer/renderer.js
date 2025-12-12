@@ -143,13 +143,16 @@ async function createTab(url = null) {
 
   webview.addEventListener('did-start-loading', () => {
     if (activeTabId === tabId) {
-      // update loading state if needed
+      // Show loading state - keep icon, just add spinning class
+      refreshBtn.classList.add('loading');
     }
   });
 
   webview.addEventListener('did-stop-loading', () => {
     if (activeTabId === tabId) {
       updateUrlBar(webview.getURL());
+      // Stop spinning
+      refreshBtn.classList.remove('loading');
     }
     updateTabTitle(tabId, webview.getTitle());
   });
@@ -173,7 +176,9 @@ async function createTab(url = null) {
   });
 
   webview.addEventListener('new-window', (e) => {
-    createTab(e.url);
+    e.preventDefault();
+    // Navigate in the CURRENT tab instead of opening a new one
+    webview.loadURL(e.url);
   });
 
   webviewsContainer.appendChild(webview);
@@ -891,11 +896,12 @@ async function checkKeys() {
       }
     }
 
-    if (!hasAny) {
-      overlay.classList.remove('hidden');
-    } else {
-      overlay.classList.add('hidden');
-    }
+    // Don't show overlay on startup - users can access settings manually
+    // if (!hasAny) {
+    //   overlay.classList.remove('hidden');
+    // } else {
+    overlay.classList.add('hidden');
+    // }
   } catch (err) {
     console.error('Error checking keys:', err);
   }
